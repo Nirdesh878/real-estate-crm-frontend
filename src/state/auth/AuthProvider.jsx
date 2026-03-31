@@ -10,6 +10,7 @@ import {
 const initialState = {
   status: 'loading',
   user: null,
+  menus: [],
 }
 
 export function AuthProvider({ children }) {
@@ -17,13 +18,13 @@ export function AuthProvider({ children }) {
 
   const refresh = useCallback(async () => {
     try {
-      const user = await getMe()
-      setState({ status: 'authenticated', user })
+      const { user, menus } = await getMe()
+      setState({ status: 'authenticated', user, menus })
       return user
     } catch (error) {
       const status = error?.response?.status
       if (status === 401 || status === 419) {
-        setState({ status: 'unauthenticated', user: null })
+        setState({ status: 'unauthenticated', user: null, menus: [] })
         return null
       }
       throw error
@@ -45,7 +46,14 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(async () => {
     await logoutApi()
-    setState({ status: 'unauthenticated', user: null })
+    setState({ status: 'unauthenticated', user: null, menus: [] })
+  }, [])
+
+  const setMenus = useCallback((menus) => {
+    setState((prev) => ({
+      ...prev,
+      menus: Array.isArray(menus) ? menus : [],
+    }))
   }, [])
 
   useEffect(() => {
@@ -70,12 +78,23 @@ export function AuthProvider({ children }) {
     () => ({
       status: state.status,
       user: state.user,
+      menus: state.menus,
+      setMenus,
       login,
       register,
       logout,
       refresh,
     }),
-    [login, logout, refresh, register, state.status, state.user],
+    [
+      login,
+      logout,
+      refresh,
+      register,
+      setMenus,
+      state.menus,
+      state.status,
+      state.user,
+    ],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

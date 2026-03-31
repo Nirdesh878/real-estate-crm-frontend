@@ -57,5 +57,8 @@ export async function logout() {
 
 export async function getMe() {
   const { data } = await api.get('/api/user')
-  return data
+  return {
+    user: data?.user ?? null,
+    menus: Array.isArray(data?.menus) ? data.menus : [],
+  }
 }

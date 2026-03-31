@@ -1,8 +1,11 @@
 import { useMemo, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { useAuth } from '../state/auth/useAuth'
 import { getLaravelErrorMessage } from '../lib/laravelErrors'
 import { defaultDashboardPath, isAdmin } from '../lib/roles'
+import { registerSchema } from '../lib/validation/schemas'
 
 export default function RegisterPage() {
   const auth = useAuth()
@@ -14,33 +17,48 @@ export default function RegisterPage() {
     return typeof from === 'string' ? from : ''
   }, [location.state])
 
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [passwordConfirmation, setPasswordConfirmation] = useState('')
-  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
+  const form = useForm({
+    resolver: zodResolver(registerSchema),
+    defaultValues: {
+      name: '',
+      email: '',
+      password: '',
+      passwordConfirmation: '',
+    },
+    mode: 'onChange',
+  })
+
   if (auth.status === 'authenticated') {
-    return <Navigate to={fromPath} replace />
+    const redirectTarget =
+      fromPath && fromPath !== '/login' && fromPath !== '/register'
+        ? fromPath
+        : defaultDashboardPath(auth.user)
+    const safeTarget = isAdmin(auth.user)
+      ? redirectTarget
+      : redirectTarget === '/dashboard'
+        ? '/user-dashboard'
+        : redirectTarget
+    return <Navigate to={safeTarget} replace />
   }
 
-  async function onSubmit(e) {
-    e.preventDefault()
-    setSubmitting(true)
+  const onSubmit = form.handleSubmit(async (values) => {
     setError('')
 
     try {
-      const user = await auth.register({ name, email, password, passwordConfirmation })
+      const user = await auth.register(values)
       const target = fromPath || defaultDashboardPath(user)
-      const safeTarget = isAdmin(user) ? target : target === '/dashboard' ? '/user-dashboard' : target
+      const safeTarget = isAdmin(user)
+        ? target
+        : target === '/dashboard'
+          ? '/user-dashboard'
+          : target
       navigate(safeTarget, { replace: true })
     } catch (err) {
       setError(getLaravelErrorMessage(err))
-    } finally {
-      setSubmitting(false)
     }
-  }
+  })
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -69,12 +87,14 @@ export default function RegisterPage() {
               <input
                 className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-900 outline-none ring-slate-300 placeholder:text-slate-400 focus:ring-2"
                 type="text"
-                name="name"
                 autoComplete="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
+                {...form.register('name')}
               />
+              {form.formState.errors.name?.message ? (
+                <p className="mt-1 text-xs text-rose-700">
+                  {form.formState.errors.name.message}
+                </p>
+              ) : null}
             </div>
 
             <div>
@@ -84,12 +104,14 @@ export default function RegisterPage() {
               <input
                 className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-900 outline-none ring-slate-300 placeholder:text-slate-400 focus:ring-2"
                 type="email"
-                name="email"
                 autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
+                {...form.register('email')}
               />
+              {form.formState.errors.email?.message ? (
+                <p className="mt-1 text-xs text-rose-700">
+                  {form.formState.errors.email.message}
+                </p>
+              ) : null}
             </div>
 
             <div>
@@ -99,12 +121,14 @@ export default function RegisterPage() {
               <input
                 className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-900 outline-none ring-slate-300 placeholder:text-slate-400 focus:ring-2"
                 type="password"
-                name="password"
                 autoComplete="new-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
+                {...form.register('password')}
               />
+              {form.formState.errors.password?.message ? (
+                <p className="mt-1 text-xs text-rose-700">
+                  {form.formState.errors.password.message}
+                </p>
+              ) : null}
             </div>
 
             <div>
@@ -114,20 +138,22 @@ export default function RegisterPage() {
               <input
                 className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-900 outline-none ring-slate-300 placeholder:text-slate-400 focus:ring-2"
                 type="password"
-                name="password_confirmation"
                 autoComplete="new-password"
-                value={passwordConfirmation}
-                onChange={(e) => setPasswordConfirmation(e.target.value)}
-                required
+                {...form.register('passwordConfirmation')}
               />
+              {form.formState.errors.passwordConfirmation?.message ? (
+                <p className="mt-1 text-xs text-rose-700">
+                  {form.formState.errors.passwordConfirmation.message}
+                </p>
+              ) : null}
             </div>
 
             <button
               type="submit"
-              disabled={submitting || auth.status === 'loading'}
+              disabled={form.formState.isSubmitting || auth.status === 'loading'}
               className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {submitting ? 'Creating…' : 'Create account'}
+              {form.formState.isSubmitting ? 'Creating...' : 'Create account'}
             </button>
           </form>
 
