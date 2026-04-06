@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { X } from 'lucide-react'
 
 export default function Drawer({ open, title, onClose, children }) {
   useEffect(() => {
@@ -13,33 +14,32 @@ export default function Drawer({ open, title, onClose, children }) {
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50">
-      <button
+    <div className="fixed inset-0 z-50 overflow-hidden">
+      <div
         aria-label="Close"
         onClick={onClose}
-        className="absolute inset-0 bg-slate-900/30"
+        className="absolute inset-0 bg-dark-900/40 backdrop-blur-sm transition-opacity duration-300"
       />
 
-      <aside className="absolute right-0 top-0 h-full w-full max-w-xl border-l border-slate-200 bg-white shadow-xl">
-        <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+      <aside className="absolute right-0 top-0 h-full w-full max-w-xl bg-white shadow-2xl transition-transform duration-500 ease-in-out transform flex flex-col border-l border-dark-200">
+        <div className="flex items-center justify-between gap-3 border-b border-dark-100 px-6 py-5 bg-dark-50/50">
           <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold text-slate-900">
+            <h2 className="truncate text-lg font-heading font-semibold text-dark-900">
               {title}
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="p-2 rounded-full text-dark-500 hover:bg-dark-200 hover:text-dark-800 transition-colors"
           >
-            Close
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="h-[calc(100%-65px)] overflow-y-auto p-5">
+        <div className="flex-1 overflow-y-auto p-6 bg-white">
           {children}
         </div>
       </aside>
     </div>
   )
 }
-

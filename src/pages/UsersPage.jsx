@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import Drawer from '../components/Drawer'
-import Navbar from '../components/Navbar'
+
 import { api } from '../lib/apiClient'
 import { debounce } from '../lib/debounce'
 import { getLaravelErrorMessage } from '../lib/laravelErrors'
@@ -324,7 +324,7 @@ export default function UsersPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <Navbar />
+      
 
       <main className="mx-auto max-w-5xl p-6">
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

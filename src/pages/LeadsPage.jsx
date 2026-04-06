@@ -2,7 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import Drawer from '../components/Drawer'
-import Navbar from '../components/Navbar'
+import BulkUploadModal from '../components/leads/BulkUploadModal'
+import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
+import { Badge } from '../components/ui/Badge'
+import { Search, Plus, Filter, MessageCircle, MoreVertical, UploadCloud } from 'lucide-react'
+
 import { api } from '../lib/apiClient'
 import { debounce } from '../lib/debounce'
 import { getLaravelErrorMessage } from '../lib/laravelErrors'
@@ -50,6 +55,7 @@ export default function LeadsPage() {
   const [selectedId, setSelectedId] = useState(null)
   const [drawerStatus, setDrawerStatus] = useState('idle') // idle|saving|saved|creating|error
   const [drawerError, setDrawerError] = useState('')
+  const [bulkUploadOpen, setBulkUploadOpen] = useState(false)
 
   const form = useForm({
     resolver: zodResolver(leadSchema),
@@ -384,179 +390,188 @@ export default function LeadsPage() {
   }, [drawerOpen, form])
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <Navbar />
-
-      <main className="mx-auto max-w-6xl p-6">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">Leads</h2>
-              <p className="mt-1 text-sm text-slate-600">
-                Captured from Meta lead forms and landing pages.
-              </p>
-            </div>
-            <button
-              onClick={openCreate}
-              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
-            >
-              Add lead
-            </button>
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600">
-                Search
-              </label>
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Name / phone / email / city / campaign"
-                className="mt-1 w-80 max-w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 placeholder:text-slate-400 focus:ring-2"
-              />
-            </div>
-          </div>
-
-          {globalError ? (
-            <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-              {globalError}
-            </div>
-          ) : null}
-
-          {loading ? (
-            <div className="mt-6 text-sm text-slate-600">Loading...</div>
-          ) : (
-            <div className="mt-6 overflow-x-auto">
-              <table className="min-w-full border-separate border-spacing-0">
-                <thead>
-                  <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    <th className="border-b border-slate-200 py-3 pr-4">ID</th>
-                    <th className="border-b border-slate-200 py-3 pr-4">
-                      Platform
-                    </th>
-                    <th className="border-b border-slate-200 py-3 pr-4">
-                      Status
-                    </th>
-                    <th className="border-b border-slate-200 py-3 pr-4">
-                      Name
-                    </th>
-                    <th className="border-b border-slate-200 py-3 pr-4">
-                      Phone
-                    </th>
-                    <th className="border-b border-slate-200 py-3 pr-4">
-                      Email
-                    </th>
-                    <th className="border-b border-slate-200 py-3 pr-4">
-                      City
-                    </th>
-                    <th className="border-b border-slate-200 py-3 pr-4">
-                      Budget
-                    </th>
-                    <th className="border-b border-slate-200 py-3 pr-4">
-                      Assigned
-                    </th>
-                    <th className="border-b border-slate-200 py-3 pr-4">
-                      Campaign
-                    </th>
-                    <th className="border-b border-slate-200 py-3">Created</th>
-                  </tr>
-                </thead>
-                <tbody className="text-sm text-slate-700">
-                  {filtered.map((l) => (
-                    <tr
-                      key={l.id}
-                      className="cursor-pointer hover:bg-slate-50"
-                      onClick={() => openEdit(l)}
-                    >
-                      <td className="border-b border-slate-100 py-3 pr-4">
-                        {l.id}
-                      </td>
-                      <td className="border-b border-slate-100 py-3 pr-4">
-                        {l.platform || '-'}
-                      </td>
-                      <td className="border-b border-slate-100 py-3 pr-4">
-                        {l.status
-                          ? statusLabelByKey.get(String(l.status)) ?? l.status
-                          : '-'}
-                      </td>
-                      <td className="border-b border-slate-100 py-3 pr-4">
-                        {l.name || '-'}
-                      </td>
-                      <td className="border-b border-slate-100 py-3 pr-4">
-                        {l.phone || '-'}
-                      </td>
-                      <td className="border-b border-slate-100 py-3 pr-4">
-                        {l.email || '-'}
-                      </td>
-                      <td className="border-b border-slate-100 py-3 pr-4">
-                        {l.city || '-'}
-                      </td>
-                      <td className="border-b border-slate-100 py-3 pr-4">
-                        {l.budget ?? '-'}
-                      </td>
-                      <td className="border-b border-slate-100 py-3 pr-4">
-                        {l.assignee?.name ?? '-'}
-                      </td>
-                      <td className="border-b border-slate-100 py-3 pr-4">
-                        {l.campaign_name || '-'}
-                      </td>
-                      <td className="border-b border-slate-100 py-3">
-                        {l.created_at ? new Date(l.created_at).toLocaleString() : ''}
-                      </td>
-                    </tr>
-                  ))}
-                  {filtered.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={11}
-                        className="py-6 text-center text-sm text-slate-500"
-                      >
-                        No leads found.
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
-          )}
+    <>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <div>
+          <h2 className="text-2xl font-heading font-bold text-dark-900">Leads Pool</h2>
+          <p className="text-sm font-medium text-dark-500 mt-1">Manage, assign, and track leads from all sources.</p>
         </div>
-      </main>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-dark-400" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search leads..."
+              className="pl-9 pr-4 py-2 bg-white border border-dark-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary-500/20 w-64 shadow-sm"
+            />
+          </div>
+          <Button variant="secondary" icon={UploadCloud} onClick={() => setBulkUploadOpen(true)}>
+            Import CSV
+          </Button>
+          <Button icon={Plus} onClick={openCreate}>
+            Add Lead
+          </Button>
+        </div>
+      </div>
+
+      {globalError && (
+        <div className="mb-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">
+          {globalError}
+        </div>
+      )}
+
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm whitespace-nowrap">
+              <thead className="bg-dark-50/80 border-b border-dark-200 text-dark-500">
+                <tr>
+                  <th className="font-semibold px-6 py-4 rounded-tl-xl text-xs uppercase tracking-wider">User</th>
+                  <th className="font-semibold px-6 py-4 text-xs uppercase tracking-wider">Status</th>
+                  <th className="font-semibold px-6 py-4 text-xs uppercase tracking-wider">Contact</th>
+                  <th className="font-semibold px-6 py-4 text-xs uppercase tracking-wider">Source</th>
+                  <th className="font-semibold px-6 py-4 text-xs uppercase tracking-wider">Assigned</th>
+                  <th className="font-semibold px-6 py-4 rounded-tr-xl text-xs uppercase tracking-wider text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-dark-100">
+                {loading ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-12 text-center text-dark-500">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
+                        <p className="font-medium">Loading leads data...</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-12 text-center text-dark-500 font-medium">
+                      No leads found matching your criteria.
+                    </td>
+                  </tr>
+                ) : (
+                  filtered.map((l) => {
+                    const statusLabel = l.status ? (statusLabelByKey.get(String(l.status)) ?? l.status) : 'New'
+                    let badgeVariant = 'default'
+                    if (statusLabel.toLowerCase().includes('new')) badgeVariant = 'primary'
+                    if (statusLabel.toLowerCase().includes('win') || statusLabel.toLowerCase().includes('closed')) badgeVariant = 'success'
+                    if (statusLabel.toLowerCase().includes('lost')) badgeVariant = 'danger'
+                    if (statusLabel.toLowerCase().includes('contact')) badgeVariant = 'warning'
+
+                    return (
+                      <tr key={l.id} className="hover:bg-dark-50/50 transition-colors group cursor-pointer" onClick={(e) => {
+                        // Prevent row click if clicking a button
+                        if (e.target.closest('button') || e.target.closest('a')) return;
+                        openEdit(l);
+                      }}>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-primary-600 to-primary-400 flex items-center justify-center text-white font-bold text-sm shadow-sm">
+                              {l.name ? l.name[0].toUpperCase() : 'U'}
+                            </div>
+                            <div>
+                              <p className="font-semibold text-dark-900">{l.name || 'Unknown User'}</p>
+                              <p className="text-xs text-dark-500">{l.city || 'No Location'}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <Badge variant={badgeVariant}>{statusLabel}</Badge>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-dark-700">{l.phone || '-'}</p>
+                          <p className="text-xs text-dark-400">{l.email || '-'}</p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-dark-700 capitalize">{l.platform || 'Manual'}</p>
+                          <p className="text-xs text-dark-400 truncate max-w-[150px]">{l.campaign_name || l.lead_source}</p>
+                        </td>
+                        <td className="px-6 py-4 truncate max-w-[120px]">
+                           {l.assignee ? (
+                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-dark-100 text-xs font-semibold text-dark-700">
+                               <div className="w-4 h-4 rounded-full bg-primary-500 text-white flex items-center justify-center text-[10px]">{l.assignee.name[0]}</div>
+                               {l.assignee.name}
+                             </span>
+                           ) : (
+                             <span className="text-dark-400 text-xs italic">Unassigned</span>
+                           )}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {l.phone && (
+                               <a 
+                                 href={`https://wa.me/${l.phone.replace(/[^0-9]/g, '')}`} 
+                                 target="_blank" 
+                                 rel="noopener noreferrer"
+                                 className="p-1.5 rounded-md bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366] hover:text-white transition-colors"
+                                 title="Message on WhatsApp"
+                               >
+                                 <MessageCircle className="w-4 h-4" />
+                               </a>
+                            )}
+                            <button className="p-1.5 rounded-md bg-dark-100 text-dark-600 hover:bg-dark-200 transition-colors">
+                               <MoreVertical className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <BulkUploadModal 
+        open={bulkUploadOpen} 
+        onClose={() => setBulkUploadOpen(false)} 
+        onUploadSuccess={() => {
+           // Reload leads implicitly by toggling UI or calling api.get... 
+           // We rely on window.location.reload() for a hard refresh for simplicity in this frontend UI mockup
+           window.location.reload()
+        }}
+      />
 
       <Drawer
         open={drawerOpen}
         title={
           drawerMode === 'create'
-            ? 'New lead'
+            ? 'Add New Lead'
             : selectedId
-              ? `Lead #${selectedId}`
-              : 'Lead'
+              ? `Edit Lead #${selectedId}`
+              : 'Lead Details'
         }
         onClose={() => setDrawerOpen(false)}
       >
         {drawerError ? (
-          <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          <div className="mb-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-rose-500"></div>
             {drawerError}
           </div>
         ) : null}
 
-        <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
-          {drawerStatus === 'creating'
-            ? 'Creating...'
-            : drawerStatus === 'saving'
-              ? 'Saving...'
-              : drawerStatus === 'saved'
-                ? 'Saved'
-                : drawerStatus === 'error'
-                  ? 'Error'
-                  : ''}
+        <div className="flex items-center gap-2 mb-6 text-xs font-bold uppercase tracking-widest text-dark-400">
+          <div className="flex-1 h-px bg-dark-200"></div>
+          {drawerStatus === 'creating' && <span className="text-primary-500 animate-pulse">Creating...</span>}
+          {drawerStatus === 'saving' && <span className="text-amber-500 animate-pulse">Saving changes...</span>}
+          {drawerStatus === 'saved' && <span className="text-emerald-500">All changes saved</span>}
+          {drawerStatus === 'error' && <span className="text-rose-500">Save failed</span>}
+          {drawerStatus === 'idle' && <span>Fill Details</span>}
+          <div className="flex-1 h-px bg-dark-200"></div>
         </div>
 
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="space-y-5 pb-10">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium text-slate-700">
-                Status
+              <label className="block text-sm font-semibold text-dark-700 mb-1.5">
+                Lead Status
               </label>
               <select
-                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                className="w-full rounded-xl border border-dark-200 bg-dark-50 px-3.5 py-2.5 text-sm font-medium text-dark-900 outline-none focus:ring-2 focus:ring-primary-500/50 focus:bg-white transition-all shadow-sm"
                 {...form.register('status')}
               >
                 {statusesSorted.length
@@ -572,7 +587,7 @@ export default function LeadsPage() {
                     ))
                   : ['new', 'contacted', 'qualified', 'unqualified', 'closed'].map(
                       (s) => (
-                        <option key={s} value={s}>
+                        <option key={s} value={s} className="capitalize">
                           {s}
                         </option>
                       ),
@@ -581,16 +596,16 @@ export default function LeadsPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700">
-                Assigned caller
+              <label className="block text-sm font-semibold text-dark-700 mb-1.5">
+                Assigned Caller
               </label>
               <select
-                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                className="w-full rounded-xl border border-dark-200 bg-dark-50 px-3.5 py-2.5 text-sm font-medium text-dark-900 outline-none focus:ring-2 focus:ring-primary-500/50 focus:bg-white transition-all shadow-sm"
                 {...form.register('assigned_user_id', {
                   setValueAs: (v) => (v === '' ? null : Number(v)),
                 })}
               >
-                <option value="">Unassigned</option>
+                <option value="">-- Unassigned --</option>
                 {callerOptions.map((u) => (
                   <option key={u.value} value={u.value}>
                     {u.label}
@@ -601,150 +616,176 @@ export default function LeadsPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700">
-              Follow up at
-            </label>
-            <input
-              className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-900 outline-none ring-slate-300 focus:ring-2"
-              type="datetime-local"
-              {...form.register('follow_up_at', {
-                setValueAs: (v) => (v ? String(v).slice(0, 16) : ''),
-              })}
-            />
+             <h3 className="text-base font-heading font-bold text-dark-900 border-b border-dark-100 pb-2 mb-4 mt-8">Contact Information</h3>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <label className="block text-sm font-medium text-slate-700">
-                Name
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <div className="col-span-full">
+              <label className="block text-sm font-semibold text-dark-700 mb-1.5">
+                Full Name
               </label>
               <input
-                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                className="w-full rounded-xl border border-dark-200 bg-dark-50 px-3.5 py-2.5 text-sm text-dark-900 outline-none focus:ring-2 focus:ring-primary-500/50 focus:bg-white transition-all shadow-sm"
+                placeholder="John Doe"
                 {...form.register('name')}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">
-                Phone
+              <label className="block text-sm font-semibold text-dark-700 mb-1.5">
+                Phone Number
               </label>
               <input
-                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                className="w-full rounded-xl border border-dark-200 bg-dark-50 px-3.5 py-2.5 text-sm text-dark-900 outline-none focus:ring-2 focus:ring-primary-500/50 focus:bg-white transition-all shadow-sm"
+                placeholder="+91 9999999999"
                 {...form.register('phone')}
               />
               {form.formState.errors.phone?.message ? (
-                <p className="mt-1 text-xs text-rose-700">
+                <p className="mt-1.5 text-xs text-rose-600 font-medium tracking-wide">
                   {form.formState.errors.phone.message}
                 </p>
               ) : null}
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">
-                Email
+              <label className="block text-sm font-semibold text-dark-700 mb-1.5">
+                Email Address
               </label>
               <input
-                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                className="w-full rounded-xl border border-dark-200 bg-dark-50 px-3.5 py-2.5 text-sm text-dark-900 outline-none focus:ring-2 focus:ring-primary-500/50 focus:bg-white transition-all shadow-sm"
                 type="email"
+                placeholder="john@example.com"
                 {...form.register('email')}
               />
               {form.formState.errors.email?.message ? (
-                <p className="mt-1 text-xs text-rose-700">
+                <p className="mt-1.5 text-xs text-rose-600 font-medium tracking-wide">
                   {form.formState.errors.email.message}
                 </p>
               ) : null}
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">
-                City
+              <label className="block text-sm font-semibold text-dark-700 mb-1.5">
+                City / Location
               </label>
               <input
-                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                className="w-full rounded-xl border border-dark-200 bg-dark-50 px-3.5 py-2.5 text-sm text-dark-900 outline-none focus:ring-2 focus:ring-primary-500/50 focus:bg-white transition-all shadow-sm"
+                placeholder="Mumbai, Maharashtra"
                 {...form.register('city')}
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700">
-                Budget
+             <div>
+              <label className="block text-sm font-semibold text-dark-700 mb-1.5">
+                Follow Up Date/Time
               </label>
               <input
-                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-900 outline-none ring-slate-300 focus:ring-2"
-                {...form.register('budget')}
+                className="w-full rounded-xl border border-dark-200 bg-dark-50 px-3.5 py-2.5 text-sm text-dark-900 outline-none focus:ring-2 focus:ring-primary-500/50 focus:bg-white transition-all shadow-sm"
+                type="datetime-local"
+                {...form.register('follow_up_at', {
+                  setValueAs: (v) => (v ? String(v).slice(0, 16) : ''),
+                })}
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700">
-                Plot size
-              </label>
-              <input
-                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-900 outline-none ring-slate-300 focus:ring-2"
-                {...form.register('plot_size')}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700">
-                Purpose
-              </label>
-              <input
-                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-900 outline-none ring-slate-300 focus:ring-2"
-                {...form.register('purpose')}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700">
-                Timeline to buy
-              </label>
-              <input
-                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-900 outline-none ring-slate-300 focus:ring-2"
-                {...form.register('timeline_to_buy')}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700">
-                Loan required
-              </label>
-              <select
-                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-900 outline-none ring-slate-300 focus:ring-2"
-                {...form.register('loan_required')}
-              >
-                <option value="">Unknown</option>
-                <option value="yes">Yes</option>
-                <option value="no">No</option>
-              </select>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700">
-              Notes
-            </label>
+             <h3 className="text-base font-heading font-bold text-dark-900 border-b border-dark-100 pb-2 mb-4 mt-8">Property Preferences</h3>
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <div>
+              <label className="block text-sm font-semibold text-dark-700 mb-1.5">
+                Budget
+              </label>
+              <input
+                className="w-full rounded-xl border border-dark-200 bg-dark-50 px-3.5 py-2.5 text-sm text-dark-900 outline-none focus:ring-2 focus:ring-primary-500/50 focus:bg-white transition-all shadow-sm"
+                placeholder="e.g. 50 Lacs - 1 Cr"
+                {...form.register('budget')}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-dark-700 mb-1.5">
+                Plot/Property Size
+              </label>
+              <input
+                className="w-full rounded-xl border border-dark-200 bg-dark-50 px-3.5 py-2.5 text-sm text-dark-900 outline-none focus:ring-2 focus:ring-primary-500/50 focus:bg-white transition-all shadow-sm"
+                placeholder="e.g. 1000 sqft"
+                {...form.register('plot_size')}
+              />
+            </div>
+             <div>
+              <label className="block text-sm font-semibold text-dark-700 mb-1.5">
+                Purpose
+              </label>
+              <input
+                className="w-full rounded-xl border border-dark-200 bg-dark-50 px-3.5 py-2.5 text-sm text-dark-900 outline-none focus:ring-2 focus:ring-primary-500/50 focus:bg-white transition-all shadow-sm"
+                placeholder="Investment vs Residential"
+                {...form.register('purpose')}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3 mt-1">
+              <div>
+                 <label className="block text-sm font-semibold text-dark-700 mb-1.5">
+                  Timeline
+                </label>
+                <input
+                  className="w-full rounded-xl border border-dark-200 bg-dark-50 px-3.5 py-2.5 text-sm text-dark-900 outline-none focus:ring-2 focus:ring-primary-500/50 focus:bg-white transition-all shadow-sm"
+                  placeholder="e.g. 3 Months"
+                  {...form.register('timeline_to_buy')}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-dark-700 mb-1.5">
+                  Loan Required?
+                </label>
+                <select
+                  className="w-full rounded-xl border border-dark-200 bg-dark-50 px-3.5 py-2.5 text-sm text-dark-900 outline-none focus:ring-2 focus:ring-primary-500/50 focus:bg-white transition-all shadow-sm"
+                  {...form.register('loan_required')}
+                >
+                  <option value="">Unknown</option>
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div>
+             <h3 className="text-base font-heading font-bold text-dark-900 border-b border-dark-100 pb-2 mb-4 mt-8">Internal Notes</h3>
+          </div>
+
+          <div>
             <textarea
-              className="mt-1 min-h-28 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-900 outline-none ring-slate-300 focus:ring-2"
+              className="min-h-32 w-full rounded-xl border border-dark-200 bg-dark-50 px-4 py-3 text-sm text-dark-900 outline-none focus:ring-2 focus:ring-primary-500/50 focus:bg-white transition-all shadow-sm placeholder-dark-400"
+              placeholder="Add any interaction details, call transcripts, or context here..."
               {...form.register('notes')}
             />
           </div>
 
-          {drawerMode === 'create' ? (
-            <p className="text-xs text-slate-500">
-              Tip: Enter phone or email to auto-create the lead.
-            </p>
-          ) : null}
+          {drawerMode === 'create' && (
+            <div className="bg-primary-50 border border-primary-200 rounded-xl p-3 text-xs font-medium text-primary-800 flex items-center gap-2 mt-4">
+              <div className="w-1.5 h-1.5 rounded-full bg-primary-500"></div>
+              Tip: Enter phone or email to auto-save and create the lead.
+            </div>
+          )}
 
-          <details className="rounded-xl border border-slate-200 bg-white p-4">
-            <summary className="cursor-pointer text-sm font-medium text-slate-900">
-              Tracking fields
+          <details className="rounded-2xl border border-dark-200 bg-dark-50 p-5 mt-6 group">
+            <summary className="cursor-pointer text-sm font-bold text-dark-800 uppercase tracking-widest outline-none list-none flex items-center justify-between">
+              Advanced Tracking & UTMs
+              <div className="w-6 h-6 rounded-full bg-dark-200 flex items-center justify-center group-open:rotate-180 transition-transform">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+              </div>
             </summary>
-            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 pt-4 border-t border-dark-200">
               {trackingFields.map(([key, label]) => (
                 <div key={key}>
-                  <label className="block text-sm font-medium text-slate-700">
+                  <label className="block text-xs font-bold text-dark-500 uppercase tracking-wide mb-1.5">
                     {label}
                   </label>
                   <input
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-900 outline-none ring-slate-300 focus:ring-2"
+                    className="w-full rounded-lg border border-dark-200 bg-white px-3 py-2 text-sm text-dark-900 outline-none focus:ring-2 focus:ring-primary-500/50"
                     {...form.register(key)}
                   />
                   {key === 'source_url' &&
                   form.formState.errors.source_url?.message ? (
-                    <p className="mt-1 text-xs text-rose-700">
+                    <p className="mt-1 text-xs text-rose-600 font-medium">
                       {form.formState.errors.source_url.message}
                     </p>
                   ) : null}
@@ -754,6 +795,6 @@ export default function LeadsPage() {
           </details>
         </div>
       </Drawer>
-    </div>
+    </>
   )
 }

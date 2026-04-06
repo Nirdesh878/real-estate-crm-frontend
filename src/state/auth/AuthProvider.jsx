@@ -63,7 +63,7 @@ export function AuthProvider({ children }) {
       try {
         await refresh()
       } catch {
-        if (!cancelled) setState({ status: 'unauthenticated', user: null })
+        if (!cancelled) setState({ status: 'unauthenticated', user: null, menus: [] })
       }
     }
 

@@ -2,7 +2,9 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import ProtectedRoute from './routes/ProtectedRoute'
 import AdminRoute from './routes/AdminRoute'
 import MenuGuard from './routes/MenuGuard'
+import AppLayout from './components/layout/AppLayout'
 import DashboardPage from './pages/DashboardPage'
+import IntegrationsPage from './pages/IntegrationsPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import UserDashboardPage from './pages/UserDashboardPage'
@@ -35,15 +37,18 @@ export default function App() {
 
         <Route element={<ProtectedRoute />}>
           <Route element={<MenuGuard />}>
-            <Route path="/user-dashboard" element={<UserDashboardPage />} />
+            <Route element={<AppLayout />}>
+              <Route path="/user-dashboard" element={<UserDashboardPage />} />
 
-            <Route element={<AdminRoute />}>
-              <Route path="/dashboard" element={<DashboardPage />} />
-              <Route path="/users" element={<UsersPage />} />
-              <Route path="/permissions" element={<PermissionsPage />} />
-              <Route path="/menus" element={<MenusPage />} />
-              <Route path="/lead-statuses" element={<LeadStatusesPage />} />
-              <Route path="/leads" element={<LeadsPage />} />
+              <Route element={<AdminRoute />}>
+                <Route path="/dashboard" element={<DashboardPage />} />
+                <Route path="/integrations" element={<IntegrationsPage />} />
+                <Route path="/users" element={<UsersPage />} />
+                <Route path="/permissions" element={<PermissionsPage />} />
+                <Route path="/menus" element={<MenusPage />} />
+                <Route path="/lead-statuses" element={<LeadStatusesPage />} />
+                <Route path="/leads" element={<LeadsPage />} />
+              </Route>
             </Route>
           </Route>
         </Route>
