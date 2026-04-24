@@ -82,8 +82,7 @@ export const leadStatusSchema = z.object({
   is_active: z.coerce.boolean().optional(),
 })
 
-export const leadSchema = z
-  .object({
+export const leadBaseSchema = z.object({
     status: z.string().trim().min(1),
     assigned_user_id: z.coerce.number().int().nullable().optional(),
     follow_up_at: z.string().nullable().optional(),
@@ -91,6 +90,7 @@ export const leadSchema = z
 
     name: z.string().nullable().optional(),
     phone: z.string().nullable().optional(),
+    whatsapp_eligible: z.coerce.boolean().optional(),
     email: z
       .string()
       .trim()
@@ -118,12 +118,30 @@ export const leadSchema = z
     utm_campaign: z.string().nullable().optional(),
     utm_content: z.string().nullable().optional(),
     utm_term: z.string().nullable().optional(),
+
+    receipt_no: z.string().nullable().optional(),
+    receipt_date: z.string().nullable().optional(),
+    customer_code: z.string().nullable().optional(),
+    payment_against: z.string().nullable().optional(),
+    cheque_no: z.string().nullable().optional(),
+    bank_name: z.string().nullable().optional(),
+    transaction_description: z.string().nullable().optional(),
+    transaction_amount: z.union([z.string(), z.number()]).nullable().optional(),
+    amount_in_words: z.string().nullable().optional(),
+    receipt_notes: z.string().nullable().optional(),
   })
-  .refine(
-    (v) => {
-      const phone = String(v.phone ?? '').trim()
-      const email = String(v.email ?? '').trim()
-      return phone.length > 0 || email.length > 0
-    },
-    { message: 'Phone or email is required', path: ['phone'] },
-  )
+
+export const leadCreateSchema = leadBaseSchema.refine(
+  (v) => {
+    const phone = String(v.phone ?? '').trim()
+    const email = String(v.email ?? '').trim()
+    return phone.length > 0 || email.length > 0
+  },
+  { message: 'Phone or email is required', path: ['phone'] },
+)
+
+// Editing should allow empty contact (e.g. imported leads), otherwise autosave blocks updates.
+export const leadEditSchema = leadBaseSchema
+
+// Back-compat name
+export const leadSchema = leadCreateSchema

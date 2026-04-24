@@ -6,13 +6,15 @@ import BulkUploadModal from '../components/leads/BulkUploadModal'
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
-import { Search, Plus, Filter, MessageCircle, MoreVertical, UploadCloud } from 'lucide-react'
+import { Search, Plus, Filter, MessageCircle, MoreVertical, UploadCloud, RefreshCw, Download } from 'lucide-react'
 
 import { api } from '../lib/apiClient'
 import { debounce } from '../lib/debounce'
 import { getLaravelErrorMessage } from '../lib/laravelErrors'
-import { ROLE_CALLER } from '../lib/roles'
-import { leadSchema } from '../lib/validation/schemas'
+import { ROLE_CALLER, isAdmin } from '../lib/roles'
+import { leadCreateSchema, leadEditSchema } from '../lib/validation/schemas'
+import { useAuth } from '../state/auth/useAuth'
+import { WHATSAPP_REFRESH_TEMPLATE_NAME } from '../config'
 
 const trackingFields = [
   ['platform', 'Platform'],
@@ -35,12 +37,29 @@ function toNullIfEmpty(v) {
 }
 
 export default function LeadsPage() {
+  const auth = useAuth()
   const [loading, setLoading] = useState(true)
   const [globalError, setGlobalError] = useState('')
   const [leads, setLeads] = useState([])
   const [q, setQ] = useState('')
   const [users, setUsers] = useState([])
   const [statuses, setStatuses] = useState([])
+
+  const [metaRefreshing, setMetaRefreshing] = useState(false)
+  const [metaRefreshError, setMetaRefreshError] = useState('')
+  const [metaRefreshSummary, setMetaRefreshSummary] = useState(null)
+  const [metaRefreshHours, setMetaRefreshHours] = useState('168')
+  const [lastRefreshedAt, setLastRefreshedAt] = useState(() => {
+    try {
+      return window.localStorage.getItem('meta_leads_last_refreshed_at') || ''
+    } catch {
+      return ''
+    }
+  })
+
+  const [waSending, setWaSending] = useState(false)
+  const [waError, setWaError] = useState('')
+  const [waSummary, setWaSummary] = useState(null)
 
   const leadsRef = useRef(leads)
   const drawerModeRef = useRef('edit')
@@ -56,9 +75,25 @@ export default function LeadsPage() {
   const [drawerStatus, setDrawerStatus] = useState('idle') // idle|saving|saved|creating|error
   const [drawerError, setDrawerError] = useState('')
   const [bulkUploadOpen, setBulkUploadOpen] = useState(false)
+  const [receiptDownloading, setReceiptDownloading] = useState(false)
+
+  const schema = useMemo(
+    () => (drawerMode === 'create' ? leadCreateSchema : leadEditSchema),
+    [drawerMode],
+  )
+
+  const schemaRef = useRef(schema)
+  useEffect(() => {
+    schemaRef.current = schema
+  }, [schema])
+
+  const resolver = useCallback(async (values, context, options) => {
+    const r = zodResolver(schemaRef.current)
+    return r(values, context, options)
+  }, [])
 
   const form = useForm({
-    resolver: zodResolver(leadSchema),
+    resolver,
     defaultValues: {
       status: 'new',
       assigned_user_id: null,
@@ -66,6 +101,7 @@ export default function LeadsPage() {
       notes: '',
       name: '',
       phone: '',
+      whatsapp_eligible: true,
       email: '',
       city: '',
       budget: '',
@@ -85,6 +121,17 @@ export default function LeadsPage() {
       utm_campaign: '',
       utm_content: '',
       utm_term: '',
+
+      receipt_no: '',
+      receipt_date: '',
+      customer_code: '',
+      payment_against: '',
+      cheque_no: '',
+      bank_name: '',
+      transaction_description: '',
+      transaction_amount: '',
+      amount_in_words: '',
+      receipt_notes: '',
     },
     mode: 'onChange',
   })
@@ -142,6 +189,18 @@ export default function LeadsPage() {
     return String(firstActive?.key ?? 'new')
   }, [statusesSorted])
 
+  const canRefreshMeta = useMemo(() => isAdmin(auth?.user), [auth?.user])
+
+  const refreshRanges = useMemo(
+    () => [
+      { value: '24', label: 'Last 24 hours' },
+      { value: '168', label: 'Last 7 days' },
+      { value: '720', label: 'Last 30 days' },
+      { value: '8760', label: 'Last 1 year' },
+    ],
+    [],
+  )
+
   useEffect(() => {
     let cancelled = false
 
@@ -173,6 +232,99 @@ export default function LeadsPage() {
     }
   }, [])
 
+  const refreshMetaLeads = useCallback(async () => {
+    if (!canRefreshMeta) return
+    if (metaRefreshing) return
+
+    setMetaRefreshing(true)
+    setMetaRefreshError('')
+    setMetaRefreshSummary(null)
+    setWaError('')
+    setWaSummary(null)
+
+    try {
+      const hours = Number(metaRefreshHours)
+      const { data } = await api.post('/api/meta-leads/refresh', {
+        hours: Number.isFinite(hours) ? hours : 168,
+        limit: 50,
+        pages: 3,
+      })
+
+      if (!data?.success) {
+        const firstErr = Array.isArray(data?.errors) ? data.errors[0]?.message : null
+        throw new Error(firstErr || 'Meta refresh failed.')
+      }
+
+      setMetaRefreshSummary(data)
+
+      const ts = data?.last_refreshed_at || new Date().toISOString()
+      setLastRefreshedAt(ts)
+      try {
+        window.localStorage.setItem('meta_leads_last_refreshed_at', ts)
+      } catch {
+        // ignore
+      }
+
+      const leadsRes = await api.get('/api/leads')
+      setLeads(Array.isArray(leadsRes.data) ? leadsRes.data : [])
+
+      const insertedCount = Number(data?.inserted ?? 0)
+      const insertedLeadIds = Array.isArray(data?.inserted_lead_ids) ? data.inserted_lead_ids : []
+      if (insertedCount > 0 && insertedLeadIds.length) {
+        const ok = window.confirm(
+          `${insertedCount} new leads fetched. Do you also want to send WhatsApp messages?`,
+        )
+        if (ok) {
+          setWaSending(true)
+          try {
+            const { data: waData } = await api.post(
+              '/api/whatsapp/refresh-campaign/send',
+              {
+                template_name: WHATSAPP_REFRESH_TEMPLATE_NAME,
+                lead_ids: insertedLeadIds,
+              },
+            )
+            setWaSummary(waData)
+          } catch (err) {
+            setWaError(getLaravelErrorMessage(err))
+          } finally {
+            setWaSending(false)
+          }
+        }
+      }
+    } catch (err) {
+      setMetaRefreshError(getLaravelErrorMessage(err))
+    } finally {
+      setMetaRefreshing(false)
+    }
+  }, [canRefreshMeta, metaRefreshHours, metaRefreshing])
+
+  const downloadReceipt = useCallback(async () => {
+    if (!selectedId) return
+    if (receiptDownloading) return
+
+    setReceiptDownloading(true)
+    try {
+      const res = await api.get(`/api/leads/${selectedId}/receipt`, { responseType: 'blob' })
+      const blob = new Blob([res.data], {
+        type: res.headers?.['content-type'] ?? 'text/html',
+      })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `receipt-lead-${selectedId}.html`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      setDrawerError(getLaravelErrorMessage(err))
+      setDrawerStatus('error')
+    } finally {
+      setReceiptDownloading(false)
+    }
+  }, [receiptDownloading, selectedId])
+
   const callerOptions = useMemo(() => {
     return users
       .filter((u) => Number(u.role_id) === ROLE_CALLER)
@@ -191,6 +343,7 @@ export default function LeadsPage() {
       notes: '',
       name: '',
       phone: '',
+      whatsapp_eligible: true,
       email: '',
       city: '',
       budget: '',
@@ -210,6 +363,17 @@ export default function LeadsPage() {
       utm_campaign: '',
       utm_content: '',
       utm_term: '',
+
+      receipt_no: '',
+      receipt_date: '',
+      customer_code: '',
+      payment_against: '',
+      cheque_no: '',
+      bank_name: '',
+      transaction_description: '',
+      transaction_amount: '',
+      amount_in_words: '',
+      receipt_notes: '',
     })
     setDrawerOpen(true)
   }
@@ -230,6 +394,7 @@ export default function LeadsPage() {
         notes: data?.notes ?? '',
         name: data?.name ?? '',
         phone: data?.phone ?? '',
+        whatsapp_eligible: data?.whatsapp_eligible ?? true,
         email: data?.email ?? '',
         city: data?.city ?? '',
         budget: data?.budget ?? '',
@@ -254,6 +419,17 @@ export default function LeadsPage() {
         utm_campaign: data?.utm_campaign ?? '',
         utm_content: data?.utm_content ?? '',
         utm_term: data?.utm_term ?? '',
+
+        receipt_no: data?.receipt_no ?? '',
+        receipt_date: data?.receipt_date ?? '',
+        customer_code: data?.customer_code ?? '',
+        payment_against: data?.payment_against ?? '',
+        cheque_no: data?.cheque_no ?? '',
+        bank_name: data?.bank_name ?? '',
+        transaction_description: data?.transaction_description ?? '',
+        transaction_amount: data?.transaction_amount ?? '',
+        amount_in_words: data?.amount_in_words ?? '',
+        receipt_notes: data?.receipt_notes ?? '',
       })
     } catch (err) {
       setDrawerError(getLaravelErrorMessage(err))
@@ -266,7 +442,7 @@ export default function LeadsPage() {
       if (drawerModeRef.current !== 'edit' || !selectedIdRef.current) return
       const id = selectedIdRef.current
 
-      const parsed = leadSchema.safeParse(form.getValues())
+      const parsed = schemaRef.current.safeParse(form.getValues())
       if (!parsed.success) return
 
       setDrawerStatus('saving')
@@ -281,6 +457,7 @@ export default function LeadsPage() {
           notes: toNullIfEmpty(d.notes),
           name: toNullIfEmpty(d.name),
           phone: toNullIfEmpty(d.phone),
+          whatsapp_eligible: Boolean(d.whatsapp_eligible),
           email: toNullIfEmpty(d.email),
           city: toNullIfEmpty(d.city),
           budget: toNullIfEmpty(d.budget),
@@ -303,6 +480,17 @@ export default function LeadsPage() {
           utm_campaign: toNullIfEmpty(d.utm_campaign),
           utm_content: toNullIfEmpty(d.utm_content),
           utm_term: toNullIfEmpty(d.utm_term),
+
+          receipt_no: toNullIfEmpty(d.receipt_no),
+          receipt_date: toNullIfEmpty(d.receipt_date),
+          customer_code: toNullIfEmpty(d.customer_code),
+          payment_against: toNullIfEmpty(d.payment_against),
+          cheque_no: toNullIfEmpty(d.cheque_no),
+          bank_name: toNullIfEmpty(d.bank_name),
+          transaction_description: toNullIfEmpty(d.transaction_description),
+          transaction_amount: toNullIfEmpty(d.transaction_amount),
+          amount_in_words: toNullIfEmpty(d.amount_in_words),
+          receipt_notes: toNullIfEmpty(d.receipt_notes),
         }
 
         const { data } = await api.put(`/api/leads/${id}`, payload)
@@ -323,7 +511,7 @@ export default function LeadsPage() {
       if (drawerModeRef.current !== 'create') return
       if (drawerStatusRef.current === 'creating') return
 
-      const parsed = leadSchema.safeParse(form.getValues())
+      const parsed = schemaRef.current.safeParse(form.getValues())
       if (!parsed.success) return
 
       setDrawerStatus('creating')
@@ -338,6 +526,7 @@ export default function LeadsPage() {
           notes: toNullIfEmpty(d.notes),
           name: toNullIfEmpty(d.name),
           phone: toNullIfEmpty(d.phone),
+          whatsapp_eligible: Boolean(d.whatsapp_eligible),
           email: toNullIfEmpty(d.email),
           city: toNullIfEmpty(d.city),
           budget: toNullIfEmpty(d.budget),
@@ -360,6 +549,17 @@ export default function LeadsPage() {
           utm_campaign: toNullIfEmpty(d.utm_campaign),
           utm_content: toNullIfEmpty(d.utm_content),
           utm_term: toNullIfEmpty(d.utm_term),
+
+          receipt_no: toNullIfEmpty(d.receipt_no),
+          receipt_date: toNullIfEmpty(d.receipt_date),
+          customer_code: toNullIfEmpty(d.customer_code),
+          payment_against: toNullIfEmpty(d.payment_against),
+          cheque_no: toNullIfEmpty(d.cheque_no),
+          bank_name: toNullIfEmpty(d.bank_name),
+          transaction_description: toNullIfEmpty(d.transaction_description),
+          transaction_amount: toNullIfEmpty(d.transaction_amount),
+          amount_in_words: toNullIfEmpty(d.amount_in_words),
+          receipt_notes: toNullIfEmpty(d.receipt_notes),
         }
 
         const { data } = await api.post('/api/leads', payload)
@@ -395,6 +595,11 @@ export default function LeadsPage() {
         <div>
           <h2 className="text-2xl font-heading font-bold text-dark-900">Leads Pool</h2>
           <p className="text-sm font-medium text-dark-500 mt-1">Manage, assign, and track leads from all sources.</p>
+          {lastRefreshedAt ? (
+            <p className="text-xs font-medium text-dark-400 mt-1">
+              Last refreshed: {new Date(lastRefreshedAt).toLocaleString()}
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative">
@@ -406,14 +611,95 @@ export default function LeadsPage() {
               className="pl-9 pr-4 py-2 bg-white border border-dark-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary-500/20 w-64 shadow-sm"
             />
           </div>
+
+          {canRefreshMeta ? (
+            <>
+              <select
+                value={metaRefreshHours}
+                onChange={(e) => setMetaRefreshHours(e.target.value)}
+                className="px-3 py-2 bg-white border border-dark-200 rounded-xl text-sm font-medium text-dark-800 focus:outline-none focus:ring-2 focus:ring-primary-500/20 shadow-sm"
+                disabled={metaRefreshing}
+              >
+                {refreshRanges.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <Button
+                variant="secondary"
+                icon={RefreshCw}
+                onClick={refreshMetaLeads}
+                disabled={metaRefreshing || waSending}
+              >
+                {metaRefreshing ? 'Refreshing...' : 'Refresh Leads'}
+              </Button>
+            </>
+          ) : null}
+
           <Button variant="secondary" icon={UploadCloud} onClick={() => setBulkUploadOpen(true)}>
-            Import CSV
+            Import Excel
           </Button>
           <Button icon={Plus} onClick={openCreate}>
             Add Lead
           </Button>
         </div>
       </div>
+
+      {metaRefreshError ? (
+        <div className="mb-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">
+          {metaRefreshError}
+        </div>
+      ) : null}
+
+      {metaRefreshSummary?.success ? (
+        <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900">
+          Meta refresh complete - forms checked: {metaRefreshSummary.forms_checked}, leads fetched: {metaRefreshSummary.leads_fetched}, inserted: {metaRefreshSummary.inserted}, skipped duplicates: {metaRefreshSummary.skipped}
+          {typeof metaRefreshSummary?.out_of_window === 'number' || typeof metaRefreshSummary?.missing_id === 'number' ? (
+            <div className="mt-1 text-xs text-emerald-900/80">
+              {typeof metaRefreshSummary?.out_of_window === 'number' ? (
+                <span>Outside window: {metaRefreshSummary.out_of_window}</span>
+              ) : null}
+              {typeof metaRefreshSummary?.missing_id === 'number' ? (
+                <span>{typeof metaRefreshSummary?.out_of_window === 'number' ? ' • ' : ''}Missing ID: {metaRefreshSummary.missing_id}</span>
+              ) : null}
+            </div>
+          ) : null}
+          {metaRefreshSummary.inserted === 0 ? (
+            <div className="mt-1 text-xs text-emerald-900/80">
+              No new leads found in the selected time range (existing leads may have been updated).
+            </div>
+          ) : null}
+          {Array.isArray(metaRefreshSummary?.errors) && metaRefreshSummary.errors.length ? (
+            <div className="mt-2 text-xs text-emerald-900/80">
+              First error: {metaRefreshSummary.errors[0]?.message}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {waSending ? (
+        <div className="mb-6 rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm font-medium text-primary-900">
+          Sending WhatsApp messages...
+        </div>
+      ) : null}
+
+      {waError ? (
+        <div className="mb-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">
+          WhatsApp sending failed: {waError}
+        </div>
+      ) : null}
+
+      {waSummary?.success ? (
+        <div className="mb-6 rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm font-medium text-primary-900">
+          WhatsApp queued - template: {waSummary.template_name}, queued: {waSummary.queued}, skipped duplicates: {waSummary.skipped}, invalid phones: {waSummary.skipped_invalid_phone}
+          {Array.isArray(waSummary?.errors) && waSummary.errors.length ? (
+            <div className="mt-2 text-xs text-primary-900/80">
+              First error: {waSummary.errors[0]?.message}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {globalError && (
         <div className="mb-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">
@@ -526,13 +812,16 @@ export default function LeadsPage() {
         </CardContent>
       </Card>
 
-      <BulkUploadModal 
-        open={bulkUploadOpen} 
-        onClose={() => setBulkUploadOpen(false)} 
-        onUploadSuccess={() => {
-           // Reload leads implicitly by toggling UI or calling api.get... 
-           // We rely on window.location.reload() for a hard refresh for simplicity in this frontend UI mockup
-           window.location.reload()
+      <BulkUploadModal
+        open={bulkUploadOpen}
+        onClose={() => setBulkUploadOpen(false)}
+        onUploadSuccess={async () => {
+          try {
+            const { data } = await api.get('/api/leads')
+            setLeads(Array.isArray(data) ? data : [])
+          } catch (err) {
+            setGlobalError(getLaravelErrorMessage(err))
+          }
         }}
       />
 
@@ -544,6 +833,20 @@ export default function LeadsPage() {
             : selectedId
               ? `Edit Lead #${selectedId}`
               : 'Lead Details'
+        }
+        actions={
+          drawerMode === 'edit' && selectedId ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={Download}
+              onClick={downloadReceipt}
+              disabled={receiptDownloading}
+              title="Download receipt template (filled)"
+            >
+              {receiptDownloading ? 'Downloading...' : 'Receipt'}
+            </Button>
+          ) : null
         }
         onClose={() => setDrawerOpen(false)}
       >
@@ -639,6 +942,14 @@ export default function LeadsPage() {
                 placeholder="+91 9999999999"
                 {...form.register('phone')}
               />
+              <label className="mt-2 flex items-center gap-2 text-xs font-semibold text-dark-600">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-dark-300"
+                  {...form.register('whatsapp_eligible')}
+                />
+                Eligible for WhatsApp messaging
+              </label>
               {form.formState.errors.phone?.message ? (
                 <p className="mt-1.5 text-xs text-rose-600 font-medium tracking-wide">
                   {form.formState.errors.phone.message}
@@ -744,6 +1055,116 @@ export default function LeadsPage() {
                   <option value="no">No</option>
                 </select>
               </div>
+            </div>
+          </div>
+
+          <div>
+             <h3 className="text-base font-heading font-bold text-dark-900 border-b border-dark-100 pb-2 mb-4 mt-8">Receipt / Booking</h3>
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <div>
+              <label className="block text-sm font-semibold text-dark-700 mb-1.5">
+                Receipt No.
+              </label>
+              <input
+                className="w-full rounded-xl border border-dark-200 bg-dark-50 px-3.5 py-2.5 text-sm text-dark-900 outline-none focus:ring-2 focus:ring-primary-500/50 focus:bg-white transition-all shadow-sm"
+                placeholder="e.g. 03"
+                {...form.register('receipt_no')}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-dark-700 mb-1.5">
+                Receipt Date
+              </label>
+              <input
+                className="w-full rounded-xl border border-dark-200 bg-dark-50 px-3.5 py-2.5 text-sm text-dark-900 outline-none focus:ring-2 focus:ring-primary-500/50 focus:bg-white transition-all shadow-sm"
+                type="date"
+                {...form.register('receipt_date')}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-dark-700 mb-1.5">
+                Customer Code
+              </label>
+              <input
+                className="w-full rounded-xl border border-dark-200 bg-dark-50 px-3.5 py-2.5 text-sm text-dark-900 outline-none focus:ring-2 focus:ring-primary-500/50 focus:bg-white transition-all shadow-sm"
+                placeholder="e.g. BJ/03"
+                {...form.register('customer_code')}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-dark-700 mb-1.5">
+                Payment Against
+              </label>
+              <input
+                className="w-full rounded-xl border border-dark-200 bg-dark-50 px-3.5 py-2.5 text-sm text-dark-900 outline-none focus:ring-2 focus:ring-primary-500/50 focus:bg-white transition-all shadow-sm"
+                placeholder="e.g. Booking of Unit No. 07 (100 Sq.Yds.)"
+                {...form.register('payment_against')}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-dark-700 mb-1.5">
+                Cheque No.
+              </label>
+              <input
+                className="w-full rounded-xl border border-dark-200 bg-dark-50 px-3.5 py-2.5 text-sm text-dark-900 outline-none focus:ring-2 focus:ring-primary-500/50 focus:bg-white transition-all shadow-sm"
+                placeholder="e.g. 065887"
+                {...form.register('cheque_no')}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-dark-700 mb-1.5">
+                Bank Name
+              </label>
+              <input
+                className="w-full rounded-xl border border-dark-200 bg-dark-50 px-3.5 py-2.5 text-sm text-dark-900 outline-none focus:ring-2 focus:ring-primary-500/50 focus:bg-white transition-all shadow-sm"
+                placeholder="e.g. Dena Bank"
+                {...form.register('bank_name')}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <label className="block text-sm font-semibold text-dark-700 mb-1.5">
+                Transaction Description
+              </label>
+              <textarea
+                className="min-h-24 w-full rounded-xl border border-dark-200 bg-dark-50 px-4 py-3 text-sm text-dark-900 outline-none focus:ring-2 focus:ring-primary-500/50 focus:bg-white transition-all shadow-sm placeholder-dark-400"
+                placeholder="e.g. Booking of Unit at Bamboo Junction, Dhanaulti"
+                {...form.register('transaction_description')}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-dark-700 mb-1.5">
+                Transaction Amount (Rs.)
+              </label>
+              <input
+                className="w-full rounded-xl border border-dark-200 bg-dark-50 px-3.5 py-2.5 text-sm text-dark-900 outline-none focus:ring-2 focus:ring-primary-500/50 focus:bg-white transition-all shadow-sm"
+                placeholder="e.g. 250000"
+                {...form.register('transaction_amount')}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-dark-700 mb-1.5">
+                Amount In Words
+              </label>
+              <input
+                className="w-full rounded-xl border border-dark-200 bg-dark-50 px-3.5 py-2.5 text-sm text-dark-900 outline-none focus:ring-2 focus:ring-primary-500/50 focus:bg-white transition-all shadow-sm"
+                placeholder="e.g. Rupees Two Lacs Fifty Thousand Only"
+                {...form.register('amount_in_words')}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-semibold text-dark-700 mb-1.5">
+                Receipt Notes
+              </label>
+              <textarea
+                className="min-h-20 w-full rounded-xl border border-dark-200 bg-dark-50 px-4 py-3 text-sm text-dark-900 outline-none focus:ring-2 focus:ring-primary-500/50 focus:bg-white transition-all shadow-sm placeholder-dark-400"
+                placeholder="e.g. Subject to realization of Cheque / Demand Draft."
+                {...form.register('receipt_notes')}
+              />
             </div>
           </div>
 

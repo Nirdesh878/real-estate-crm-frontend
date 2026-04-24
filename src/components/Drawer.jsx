@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { X } from 'lucide-react'
 
-export default function Drawer({ open, title, onClose, children }) {
+export default function Drawer({ open, title, actions, onClose, children }) {
   useEffect(() => {
     if (!open) return
     function onKeyDown(e) {
@@ -28,12 +28,15 @@ export default function Drawer({ open, title, onClose, children }) {
               {title}
             </h2>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-full text-dark-500 hover:bg-dark-200 hover:text-dark-800 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {actions}
+            <button
+              onClick={onClose}
+              className="p-2 rounded-full text-dark-500 hover:bg-dark-200 hover:text-dark-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 bg-white">

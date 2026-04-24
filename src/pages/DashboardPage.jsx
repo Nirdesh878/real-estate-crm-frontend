@@ -13,13 +13,6 @@ const leadTrends = [
   { name: 'Sun', leads: 18 },
 ]
 
-const conversionData = [
-  { name: 'Week 1', rate: 10 },
-  { name: 'Week 2', rate: 15 },
-  { name: 'Week 3', rate: 12 },
-  { name: 'Week 4', rate: 20 },
-]
-
 const sourceData = [
   { name: 'Meta Ads', value: 400 },
   { name: 'Google', value: 300 },
