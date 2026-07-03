@@ -1,40 +1,189 @@
-# React + Vite
+# Real Estate CRM - Property Management System
 
-This project uses React + Vite + Tailwind CSS and includes a basic login flow wired for a Laravel backend.
+A full-stack Real Estate Customer Relationship Management (CRM) application developed using Laravel and React.js.
 
-## Setup
+This platform helps real estate businesses manage properties, customers, leads, follow-ups, enquiries, and sales activities through a centralized dashboard with secure authentication and role-based access.
 
-1) Create a local env file:
 
-- Copy `.env.example` to `.env`
-- Update `VITE_API_BASE_URL` (your Laravel URL, e.g. `http://localhost:8000`)
-- Choose auth mode with `VITE_AUTH_MODE`:
-  - `sanctum` (cookie-based SPA auth, recommended for Laravel)
-  - `token` (expects a bearer token from `POST /api/login`)
+## 🚀 Features
 
-2) Run the app:
 
-- `npm run dev`
+### 🔐 Authentication & Authorization
 
-## Backend expectations (Laravel)
+- Secure user registration and login
+- User session management
+- Protected routes
+- Role based access control
+- Authentication middleware
 
-- `GET /api/user` returns the authenticated user (Sanctum: `auth:sanctum`, Token: `auth:api`/`auth:sanctum`).
-- Login:
-  - Sanctum mode: `GET /sanctum/csrf-cookie` then `POST /login`
-  - Token mode: `POST /api/login` returns `{ token, user }`
-- Logout:
-  - Sanctum mode: `POST /logout`
-  - Token mode: `POST /api/logout`
 
-Currently, two official plugins are available:
+### 🏠 Property Management
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Add, update and manage property listings
+- Store property details
+- Upload and manage property images
+- Property category management
+- Search and filter properties
+- Property status tracking
 
-## React Compiler
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 👥 Customer & Lead Management
 
-## Expanding the ESLint configuration
+- Create and manage customer records
+- Store customer enquiries
+- Track interested properties
+- Manage customer communication history
+- Lead status management
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+
+### 📞 Follow-up Management
+
+- Schedule customer follow-ups
+- Track pending follow-ups
+- Maintain interaction records
+- Improve sales workflow management
+
+
+### ❤️ Favourite / Saved Properties
+
+- Save interested properties
+- Manage liked property list
+- User specific property preferences
+
+
+### 📊 Dashboard
+
+- CRM overview dashboard
+- Property statistics
+- Customer statistics
+- Lead tracking
+- Recent activity monitoring
+
+
+### 🔎 Advanced Search
+
+- Property search functionality
+- Filter by category/location/status
+- Optimized database queries
+
+
+## 🛠️ Technology Stack
+
+
+### Backend
+
+- Laravel
+- PHP
+- MySQL
+- REST API Development
+- Laravel Controllers
+- Models & Relationships
+- Middleware
+- Validation
+
+
+### Frontend
+
+- React.js
+- JavaScript
+- React Router
+- Axios
+- Bootstrap / Tailwind CSS
+- Responsive UI Design
+
+
+### Database
+
+- MySQL
+- Database Relationships
+- Query Optimization
+
+
+## 📌 Responsibilities
+
+- Developed complete backend APIs using Laravel
+- Designed database structure and relationships
+- Implemented authentication system
+- Created reusable React components
+- Integrated REST APIs with React frontend
+- Developed property and customer management modules
+- Implemented search and filtering functionality
+- Handled validations and error responses
+- Improved application performance
+
+
+## 📂 Project Architecture
+
+
+Frontend
+
+- React Components
+- Pages
+- Routes
+- API Services
+- State Management
+
+
+Backend
+
+- Controllers
+- Models
+- Middleware
+- API Routes
+- Database Migrations
+
+
+## 📷 Screenshots
+
+<img width="1918" height="901" alt="Screenshot 2026-07-01 154428" src="https://github.com/user-attachments/assets/65202bab-7c22-4f4f-9286-eaff6d65ec67" />
+<img width="1918" height="848" alt="Screenshot 2026-07-01 154446" src="https://github.com/user-attachments/assets/b18a46e9-9f36-4202-a250-2a72d98c11eb" />
+<img width="1913" height="872" alt="Screenshot 2026-07-01 154504" src="https://github.com/user-attachments/assets/bf089bf0-08e2-48bc-bc7b-7ca31c33e052" />
+<img width="1915" height="860" alt="Screenshot 2026-07-01 154318" src="https://github.com/user-attachments/assets/cd80110b-1e1c-4ec9-852d-f917f29f1058" />
+<img width="1908" height="867" alt="Screenshot 2026-07-01 154332" src="https://github.com/user-attachments/assets/df709561-7118-4495-8a1f-0eb4a0798a84" />
+<img width="1912" height="916" alt="Screenshot 2026-07-01 154344" src="https://github.com/user-attachments/assets/3329afbe-b7ea-4867-8694-7d353f37134e" />
+<img width="1918" height="857" alt="Screenshot 2026-07-01 154357" src="https://github.com/user-attachments/assets/d3b87510-868e-468d-8533-b139139139bf" />
+<img width="1913" height="882" alt="Screenshot 2026-07-01 154411" src="https://github.com/user-attachments/assets/b66a2e90-9300-4ce9-8cf3-cda52766815a" />
+
+
+
+Dashboard
+
+Property Management
+
+Customer Management
+
+Lead Tracking
+
+
+## Future Enhancements
+
+- Real time notifications
+- Email integration
+- Payment gateway integration
+- Advanced analytics reports
+- Mobile application support
+
+
+## Developer
+
+**Nirdesh Chauhan**
+
+Full Stack PHP Developer
+
+Experience:
+3+ Years
+
+
+Skills:
+
+Laravel | PHP | React.js | MySQL | REST API | JavaScript | Git
+
+
+GitHub:
+
+github.com/Nirdesh878
+
+
+LinkedIn:
+
+linkedin.com/in/nirdesh-chauhan-3829a6351
